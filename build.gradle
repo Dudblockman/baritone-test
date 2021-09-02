@@ -19,6 +19,7 @@ repositories {
 	flatDir {
 		dirs 'libs'
 	}
+	mavenLocal()
 }
 
 //https://stackoverflow.com/questions/23446233/compile-jar-from-url-in-gradle
@@ -37,6 +38,9 @@ dependencies {
 
 	// PSA: Some older mods, compiled on Loom 0.2.1, might have outdated Maven POMs.
 	// You may need to force-disable transitiveness on them.
+
+	implementation("nrl.actorsim.minecraft:actorsim-sim-minecraft-memcache-server:2021.09-SNAPSHOT")
+	testRuntimeClasspath("nrl.actorsim.minecraft:actorsim-sim-minecraft-memcache-server:2021.09-SNAPSHOT")
 }
 
 processResources {
