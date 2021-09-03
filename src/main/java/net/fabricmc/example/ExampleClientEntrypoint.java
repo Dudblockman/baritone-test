@@ -27,4 +27,7 @@ public class ExampleClientEntrypoint implements ClientModInitializer {
             }
         });
     }
+
+
+
 }

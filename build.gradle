@@ -40,7 +40,12 @@ dependencies {
 	// You may need to force-disable transitiveness on them.
 
 	implementation("nrl.actorsim.minecraft:actorsim-sim-minecraft-memcache-server:2021.09-SNAPSHOT")
+	modImplementation("nrl.actorsim.minecraft:actorsim-sim-minecraft-memcache-server:2021.09-SNAPSHOT")
 	testRuntimeClasspath("nrl.actorsim.minecraft:actorsim-sim-minecraft-memcache-server:2021.09-SNAPSHOT")
+
+	implementation("nrl.actorsim:actorsim-core-base:2021.09-SNAPSHOT")
+	modImplementation("nrl.actorsim:actorsim-core-base:2021.09-SNAPSHOT")
+	testRuntimeClasspath("nrl.actorsim:actorsim-core-base:2021.09-SNAPSHOT")
 }
 
 processResources {
