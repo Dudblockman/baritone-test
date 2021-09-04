@@ -1,6 +1,9 @@
 package nrl.actorsim.minecraft;
 
 import baritone.api.BaritoneAPI;
+import net.fabricmc.api.EnvType;
+import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.server.MinecraftServer;
 import org.slf4j.LoggerFactory;
 
 public class BaritoneConnector implements BaritoneAdapter {
@@ -22,4 +25,5 @@ public class BaritoneConnector implements BaritoneAdapter {
         //do some magic to check on Baritone
         return Command.Result.UNKNOWN;
     }
+
 }

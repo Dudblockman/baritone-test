@@ -2,11 +2,18 @@ package net.fabricmc.example;
 
 import baritone.api.BaritoneAPI;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.options.KeyBinding;
 import net.minecraft.client.util.InputUtil;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.LiteralText;
+import nrl.actorsim.minecraft.MinecraftConnector;
 import org.lwjgl.glfw.GLFW;
 
 public class ExampleClientEntrypoint implements ClientModInitializer {
@@ -26,8 +33,22 @@ public class ExampleClientEntrypoint implements ClientModInitializer {
                 client.player.sendMessage(new LiteralText("Key 1 was pressed!"), false);
             }
         });
+        MinecraftConnector.reset();
+        registerClientEvents();
+        registerServerAndWorldEvents();
     }
 
+    private void registerClientEvents() {
+        ClientLifecycleEvents.CLIENT_STARTED.register(MinecraftConnector::addClient);
+        ClientLifecycleEvents.CLIENT_STOPPING.register(MinecraftConnector::removeClient);
+    }
+
+
+    private void registerServerAndWorldEvents() {
+        ServerLifecycleEvents.SERVER_STARTING.register(MinecraftConnector::addServer);
+        ServerLifecycleEvents.SERVER_STOPPED.register(MinecraftConnector::removeServer);
+        ServerWorldEvents.LOAD.register(MinecraftConnector::addWorld);
+    }
 
 
 }
