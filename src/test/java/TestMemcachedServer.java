@@ -1,3 +1,4 @@
+import nrl.actorsim.minecraft.MemcachedServer;
 import org.slf4j.LoggerFactory;
 import org.testng.Assert;
 import org.testng.annotations.Test;
@@ -11,7 +12,7 @@ public class TestMemcachedServer {
     public void testServerStartsFine() {
         MemcachedServer server = new MemcachedServer();
         try {
-            server.initAndStart(new MockBaritoneConnector());
+            server.testInitAndStart();
         } catch (Exception e) {
             logger.error("Exception", e);
             Assert.assertTrue(false);
@@ -25,7 +26,7 @@ public class TestMemcachedServer {
         boolean keepGoing = true;
         Instant endTime = Instant.now().plusSeconds(10);
         try {
-            server.initAndStart(new MockBaritoneConnector());
+            server.testInitAndStart();
             while(keepGoing) {
                 logger.info("Test thread waiting on server...");
                 Assert.assertTrue(server.checkMemcacheServer());

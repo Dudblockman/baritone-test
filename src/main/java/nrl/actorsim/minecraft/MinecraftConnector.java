@@ -1,12 +1,12 @@
 package nrl.actorsim.minecraft;
 
+import baritone.api.BaritoneAPI;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents;
-import net.fabricmc.fabric.api.renderer.v1.RendererAccess;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.TitleScreen;
@@ -18,13 +18,13 @@ import org.lwjgl.glfw.GLFW;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.time.Instant;
+
+import static nrl.actorsim.minecraft.Command.Result.SENT_TO_BARITONE;
 
 public class MinecraftConnector {
     final static org.slf4j.Logger logger = LoggerFactory.getLogger(MinecraftConnector.class);
 
     private static MinecraftConnector instance;
-    private static BaritoneAdapter baritoneAdapter;
     private static MemcachedServer memcachedServer;
 
     private ConnectorState state;
@@ -32,8 +32,6 @@ public class MinecraftConnector {
     private MinecraftServer minecraftServer;
     private MinecraftClient minecraftClient;
     private ServerWorld serverWorld;
-
-
 
     public static void reset() {
         initInstance();
@@ -46,10 +44,6 @@ public class MinecraftConnector {
             instance.registerClientEvents();
             instance.registerServerAndWorldEvents();
         }
-        if (baritoneAdapter == null) {
-            baritoneAdapter = new BaritoneConnector();
-        }
-
         if (memcachedServer == null) {
             try {
                 memcachedServer = new MemcachedServer();
@@ -136,17 +130,12 @@ public class MinecraftConnector {
         ));
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (keyBinding.wasPressed()) {
-                returnToMainScreen(client);
+                testFunction(client);
             }
         });
     }
 
-    private void returnToMainScreen(MinecraftClient client) {
-        //adapted from GameMenuScreen.class in the menu.returnToMenu button details
-        client.world.disconnect();
-        client.disconnect();
-        client.openScreen(new TitleScreen());
-        client.startIntegratedServer("Test2");
+    private void testFunction(MinecraftClient client) {
     }
 
     // endregion
@@ -205,12 +194,30 @@ public class MinecraftConnector {
         state = ConnectorState.NOT_LOADED;
     }
 
-    public BaritoneAdapter getBaritoneAdapter() {
-        return baritoneAdapter;
+    public void run(Command command) {
+        if (command.isWorldCommand()) {
+            if (command.isLoad()) {
+                logger.info("loading world {}", command.world_name);
+                load(command.world_name);
+            } else if(command.isUnload()) {
+                logger.info("unloading world");
+                unload();
+            }
+        } else if (command.isBaritoneCommand()) {
+            sendBaritoneCommand(command);
+        }
+
     }
 
-    public void run(Command command) {
+    public void sendBaritoneCommand(Command command) {
+        String commandString = command.toBaritoneCommand();
+        logger.info("Running Command string '{}' from command {}", commandString, command);
+        boolean commandResult = BaritoneAPI.getProvider().getPrimaryBaritone().getCommandManager().execute(commandString);
+        if (commandResult) {
+            command.setResult(SENT_TO_BARITONE);
+        }
     }
+
 
     public enum ConnectorState {
         NOT_LOADED,

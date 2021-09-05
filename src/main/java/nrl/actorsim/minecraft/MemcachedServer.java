@@ -64,6 +64,13 @@ public class MemcachedServer extends WorkerThread {
         setWakeUpCall(INIT_TIMEOUT);
     }
 
+    public void testInitAndStart() throws IOException, InterruptedException {
+        this.minecraftConnector = null;
+        memcache = new MemcachedClient(new InetSocketAddress("127.0.0.1", 11211));
+        start();
+        setWakeUpCall(INIT_TIMEOUT);
+    }
+
     public void init() {
         checkMemcacheServer();
         memcache.delete(COMMAND_KEY);
@@ -168,23 +175,9 @@ public class MemcachedServer extends WorkerThread {
     }
 
     private void runCommand(Command command) {
-        if (command.isWorldCommand()) {
-            if (command.isLoad()) {
-                logger.info("loading world {}", command.world_name);
-                minecraftConnector.load(command.world_name);
-            } else if(command.isUnload()) {
-                logger.info("unloading world");
-                minecraftConnector.unload();
-            }
-        } else if (command.isBaritoneCommand()) {
-            BaritoneAdapter baritoneAdapter = minecraftConnector.getBaritoneAdapter();
-            if (baritoneAdapter != null) {
-                Command.Result result = baritoneAdapter.sendCommand(command);
-                currentCommandStart = Instant.now();
-                command.setResult(result);
-            } else {
-                logger.error("The baritioneAdapter is NULL!");
-            }
+        minecraftConnector.run(command);
+        if (isBaritoneTestMode) {
+            currentCommandStart = Instant.now();
         }
     }
 

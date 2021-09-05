@@ -1,11 +1,6 @@
 package net.fabricmc.example;
 
 import net.fabricmc.api.ModInitializer;
-import nrl.actorsim.minecraft.BaritoneAdapter;
-import nrl.actorsim.minecraft.BaritoneConnector;
-import nrl.actorsim.minecraft.MemcachedServer;
-
-import java.io.IOException;
 
 public class ExampleMod implements ModInitializer {
 	@Override
