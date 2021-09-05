@@ -8,7 +8,9 @@ import java.io.Serializable;
 import java.time.Duration;
 import java.time.Instant;
 
+import static nrl.actorsim.minecraft.Command.ActionName.*;
 import static nrl.actorsim.minecraft.Command.CommandType.*;
+import static nrl.actorsim.minecraft.Command.Result.*;
 
 public class Command implements Serializable {
     final static org.slf4j.Logger logger = LoggerFactory.getLogger(Command.class);
@@ -30,13 +32,14 @@ public class Command implements Serializable {
     }
 
     enum ActionName {
-        UNKNOWN(INVALID),
+        UNSPECIFIED(INVALID),
         GOTO(BARITONE),
-        COLLECT(CUSTOM),
-        CRAFT(CUSTOM),
+        MINE(BARITONE),
         FARM(BARITONE),
 
-        //Proposed World commands
+        CRAFT(CUSTOM),
+        SMELT(CUSTOM),
+
         LOAD(WORLD),
         RELOAD(WORLD),
         UNLOAD(WORLD),
@@ -57,7 +60,7 @@ public class Command implements Serializable {
     public Integer id;
     public ActionName action;
 
-    //NB: some commands accept [quantity] item; for example "craft 2 sticks" or "collect 3 iron_ore"
+    //NB: some commands accept [quantity] item; for example "craft 2 sticks" or "mine 3 iron_ore"
     public Integer quantity;
     public String item;
 
@@ -65,7 +68,6 @@ public class Command implements Serializable {
     public Integer x;
     public Integer z;
     public Integer y;
-
 
     public String world_name;
 
@@ -122,16 +124,16 @@ public class Command implements Serializable {
     }
 
     public boolean isFinishedExecuting() {
-        return result == Result.SUCCESS
+        return result == SUCCESS
                 || result == Result.FAIL;
     }
 
     public boolean isSentToBaritone() {
-        return result == Result.SENT_TO_BARITONE;
+        return result == SENT_TO_BARITONE;
     }
 
     public boolean isExecuting() {
-        return result == Result.EXECUTING;
+        return result == EXECUTING;
     }
 
     // endregion
@@ -142,47 +144,51 @@ public class Command implements Serializable {
     // region<Command type checking>
 
     public boolean isGoto() {
-        return action == ActionName.GOTO;
+        return action == GOTO;
     }
 
-    public boolean isCollect() {
-        return action == ActionName.COLLECT;
+    public boolean isMine() {
+        return action == MINE;
     }
 
     public boolean isCraft() {
-        return action == ActionName.CRAFT;
+        return action == CRAFT;
+    }
+
+    public boolean isSmelt() {
+        return action == SMELT;
     }
 
     public boolean isFarm() {
-        return action == ActionName.FARM;
+        return action == FARM;
     }
 
     public boolean isLoad() {
-        return action == ActionName.LOAD;
+        return action == LOAD;
     }
 
     public boolean isReload() {
-        return action == ActionName.RELOAD;
+        return action == RELOAD;
     }
 
     public boolean isUnload() {
-        return action == ActionName.UNLOAD;
+        return action == UNLOAD;
     }
 
     public boolean isStart() {
-        return action == ActionName.START;
+        return action == START;
     }
 
     public boolean isStop() {
-        return action == ActionName.STOP;
+        return action == STOP;
     }
 
-    public boolean isUnknown() {
-        return action == ActionName.UNKNOWN;
+    public boolean isUnspecified() {
+        return action == UNSPECIFIED;
     }
 
     public boolean isSuccess() {
-        return result == Result.SUCCESS;
+        return result == SUCCESS;
     }
 
     // endregion
@@ -246,6 +252,11 @@ public class Command implements Serializable {
                 yString += " " + y.toString();
             }
             command += xString + yString + zString;
+        } else if (isFarm()) {
+            command += "farm";
+        } else if (isMine()) {
+            command += "mine";
+            command += " " + quantity + " " + item;
         }
         return command;
     }

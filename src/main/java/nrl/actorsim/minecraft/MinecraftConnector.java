@@ -14,6 +14,8 @@ import net.minecraft.client.options.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.world.SaveProperties;
+import net.minecraft.world.level.LevelInfo;
 import org.lwjgl.glfw.GLFW;
 import org.slf4j.LoggerFactory;
 
@@ -202,6 +204,12 @@ public class MinecraftConnector {
             } else if(command.isUnload()) {
                 logger.info("unloading world");
                 unload();
+            } else if(command.isReload()) {
+                SaveProperties properties = minecraftServer.getSaveProperties();
+                LevelInfo levelInfo = properties.getLevelInfo();
+                String worldName = levelInfo.getLevelName();
+                logger.info("Reloading current world {}", worldName);
+                load(worldName);
             }
         } else if (command.isBaritoneCommand()) {
             sendBaritoneCommand(command);
