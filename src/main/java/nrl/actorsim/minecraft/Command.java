@@ -40,6 +40,7 @@ public class Command implements Serializable {
         CRAFT(CUSTOM),
         SMELT(CUSTOM),
 
+        CREATE(WORLD),
         LOAD(WORLD),
         RELOAD(WORLD),
         UNLOAD(WORLD),
@@ -70,6 +71,7 @@ public class Command implements Serializable {
     public Integer y;
 
     public String world_name;
+    public String world_seed;
 
     public Result result = Result.UNKNOWN;
 
@@ -161,6 +163,10 @@ public class Command implements Serializable {
 
     public boolean isFarm() {
         return action == FARM;
+    }
+
+    public boolean isCreate() {
+        return action == CREATE;
     }
 
     public boolean isLoad() {

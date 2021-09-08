@@ -196,9 +196,21 @@ public class MinecraftConnector {
         state = ConnectorState.NOT_LOADED;
     }
 
+    public void create(String worldName, String seed) {
+        unload();
+        if (seed.compareToIgnoreCase("village") == 0) {
+            seed = "-6479230070218025543";  // plains biome with a nearby village!
+        }
+        MinecraftWorldCreator minecraftWorldCreator = new MinecraftWorldCreator(worldName, seed);
+        minecraftWorldCreator.createLevel(minecraftClient);
+    }
+
     public void run(Command command) {
         if (command.isWorldCommand()) {
-            if (command.isLoad()) {
+            if (command.isCreate()) {
+                logger.info("loading world {}", command.world_name);
+                create(command.world_name, command.world_seed);
+            } else if (command.isLoad()) {
                 logger.info("loading world {}", command.world_name);
                 load(command.world_name);
             } else if(command.isUnload()) {
