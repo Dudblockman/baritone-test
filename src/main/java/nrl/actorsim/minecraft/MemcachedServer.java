@@ -17,6 +17,7 @@
 
 package nrl.actorsim.minecraft;
 
+import ch.qos.logback.classic.Level;
 import net.spy.memcached.MemcachedClient;
 import net.spy.memcached.MemcachedNode;
 import nrl.actorsim.utils.WorkerThread;
@@ -62,6 +63,9 @@ public class MemcachedServer extends WorkerThread {
         memcache = new MemcachedClient(new InetSocketAddress("127.0.0.1", 11211));
         start();
         setWakeUpCall(INIT_TIMEOUT);
+
+        //get rid of annoying messages from WorkerThread!
+        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(WorkerThread.class)).setLevel(Level.INFO);
     }
 
     public void testInitAndStart() throws IOException, InterruptedException {

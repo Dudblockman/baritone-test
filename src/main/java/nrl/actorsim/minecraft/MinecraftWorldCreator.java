@@ -18,7 +18,7 @@ import java.util.OptionalLong;
 
 /**
  * This was reverse-engineered by looking through the following code:
- * 1. TitleScreen.initWidgetsNormal() - look at the menu.singlelayer button, which leads to:
+ * 1. TitleScreen.initWidgetsNormal() - look at the menu.singleplayer button, which leads to:
  * 2. SelectWorldScreen.init - which shows the selectWorld.create action loads a new screen:
  * 3. CreateWorldScreen.method_31130(this[parent) - which calls
  * 4.   DynamicRegistryManager.Impl impl = DynamicRegistryManager.create()

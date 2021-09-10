@@ -10,8 +10,13 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.TitleScreen;
+import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.options.KeyBinding;
 import net.minecraft.client.util.InputUtil;
+import net.minecraft.entity.player.PlayerInventory;
+import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.world.SaveProperties;
@@ -111,7 +116,7 @@ public class MinecraftConnector {
     }
 
     // ====================================================
-    // region<Registered methods>
+    // region<Register methods>
 
     private void registerClientEvents() {
         ClientLifecycleEvents.CLIENT_STARTED.register(MinecraftConnector::addClient);
@@ -132,17 +137,70 @@ public class MinecraftConnector {
         ));
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (keyBinding.wasPressed()) {
-                testFunction(client);
+                testFunction();
             }
         });
     }
 
-    private void testFunction(MinecraftClient client) {
+    /**
+     * A test method that is bound to the "k" key while in a world.
+     *
+     * This empty method that is easy to fill with code to test
+     * in a debug session without reloading minecraft.
+     *
+     */
+    private void testFunction() {
     }
 
     // endregion
     // ====================================================
 
+
+    public void run(Command command) {
+        if (command.isWorldCommand()) {
+            doWorldCommand(command);
+        } else if (command.isBaritoneCommand()) {
+            sendBaritoneCommand(command);
+        } else if (command.isMissionCommand()) {
+            doMissionCommand(command);
+        }
+    }
+
+    public void sendBaritoneCommand(Command command) {
+        String commandString = command.toBaritoneCommand();
+        logger.info("Running Command string '{}' from command {}", commandString, command);
+        boolean commandResult = BaritoneAPI.getProvider().getPrimaryBaritone().getCommandManager().execute(commandString);
+        if (commandResult) {
+            command.setResult(SENT_TO_BARITONE);
+        }
+    }
+
+    // ====================================================
+    // region<World Commands>
+
+    private void doWorldCommand(Command command) {
+        switch (command.action) {
+            case CREATE:
+                logger.info("loading world {}", command.world_name);
+                create(command.world_name, command.world_seed);
+                break;
+            case LOAD:
+                logger.info("loading world {}", command.world_name);
+                load(command.world_name);
+                break;
+            case UNLOAD:
+                logger.info("unloading world");
+                unload();
+                break;
+            case RELOAD:
+                SaveProperties properties = minecraftServer.getSaveProperties();
+                LevelInfo levelInfo = properties.getLevelInfo();
+                String worldName = levelInfo.getLevelName();
+                logger.info("Reloading current world {}", worldName);
+                load(worldName);
+                break;
+        }
+    }
 
     public Command.Result loadWorld(Command command) {
         this.load(command.world_name);
@@ -204,40 +262,38 @@ public class MinecraftConnector {
         MinecraftWorldCreator minecraftWorldCreator = new MinecraftWorldCreator(worldName, seed);
         minecraftWorldCreator.createLevel(minecraftClient);
     }
+    // endregion
+    // ====================================================
 
-    public void run(Command command) {
-        if (command.isWorldCommand()) {
-            if (command.isCreate()) {
-                logger.info("loading world {}", command.world_name);
-                create(command.world_name, command.world_seed);
-            } else if (command.isLoad()) {
-                logger.info("loading world {}", command.world_name);
-                load(command.world_name);
-            } else if(command.isUnload()) {
-                logger.info("unloading world");
-                unload();
-            } else if(command.isReload()) {
-                SaveProperties properties = minecraftServer.getSaveProperties();
-                LevelInfo levelInfo = properties.getLevelInfo();
-                String worldName = levelInfo.getLevelName();
-                logger.info("Reloading current world {}", worldName);
-                load(worldName);
-            }
-        } else if (command.isBaritoneCommand()) {
-            sendBaritoneCommand(command);
-        }
-
-    }
-
-    public void sendBaritoneCommand(Command command) {
-        String commandString = command.toBaritoneCommand();
-        logger.info("Running Command string '{}' from command {}", commandString, command);
-        boolean commandResult = BaritoneAPI.getProvider().getPrimaryBaritone().getCommandManager().execute(commandString);
-        if (commandResult) {
-            command.setResult(SENT_TO_BARITONE);
+    // ====================================================
+    // region<Mission Commands>
+    private void doMissionCommand(Command command) {
+        switch (command.action) {
+            case GIVE:
+                Item item = MinecraftHelpers.findBestItemMatch(command);
+                givePlayer(item, command.quantity, command.inventory_slot_start);
+                break;
+            case CLEAR:
+                clearPlayerInventory();
         }
     }
 
+    private void givePlayer(Item item, Integer quantity, Integer inventory_position_start) {
+        ClientPlayerEntity player = minecraftClient.player;
+        PlayerInventory inventory = player.inventory;
+        ItemStack stack = new ItemStack(item, quantity);
+        inventory.insertStack(inventory_position_start, stack);
+    }
+
+    private void clearPlayerInventory() {
+        ClientPlayerEntity player = minecraftClient.player;
+        PlayerInventory inventory = player.inventory;
+        inventory.clear();
+    }
+
+
+    // endregion
+    // ====================================================
 
     public enum ConnectorState {
         NOT_LOADED,

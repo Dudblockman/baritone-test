@@ -47,7 +47,9 @@ public class Command implements Serializable {
 
         //Proposed mission commands
         START(MISSION),
-        STOP(MISSION);
+        STOP(MISSION),
+        GIVE(MISSION),
+        CLEAR(MISSION);
 
         public CommandType type;
 
@@ -64,6 +66,8 @@ public class Command implements Serializable {
     //NB: some commands accept [quantity] item; for example "craft 2 sticks" or "mine 3 iron_ore"
     public Integer quantity;
     public String item;
+    public Integer inventory_slot_start;
+    public Integer inventory_slot_end;
 
     //NB: goto commands accept coordinates; for example "goto x z [y]"
     public Integer x;
@@ -114,7 +118,6 @@ public class Command implements Serializable {
         return value;
     }
 
-
     // endregion
     // ====================================================
 
@@ -141,53 +144,8 @@ public class Command implements Serializable {
     // endregion
     // ====================================================
 
-
     // ====================================================
     // region<Command type checking>
-
-    public boolean isGoto() {
-        return action == GOTO;
-    }
-
-    public boolean isMine() {
-        return action == MINE;
-    }
-
-    public boolean isCraft() {
-        return action == CRAFT;
-    }
-
-    public boolean isSmelt() {
-        return action == SMELT;
-    }
-
-    public boolean isFarm() {
-        return action == FARM;
-    }
-
-    public boolean isCreate() {
-        return action == CREATE;
-    }
-
-    public boolean isLoad() {
-        return action == LOAD;
-    }
-
-    public boolean isReload() {
-        return action == RELOAD;
-    }
-
-    public boolean isUnload() {
-        return action == UNLOAD;
-    }
-
-    public boolean isStart() {
-        return action == START;
-    }
-
-    public boolean isStop() {
-        return action == STOP;
-    }
 
     public boolean isUnspecified() {
         return action == UNSPECIFIED;
@@ -238,12 +196,23 @@ public class Command implements Serializable {
     // endregion
     // ====================================================
 
-
     // ====================================================
     // region<Baritone specific>
 
     public boolean isBaritoneCommand() {
         return this.action.type == BARITONE;
+    }
+
+    public boolean isGoto() {
+        return action == GOTO;
+    }
+
+    public boolean isMine() {
+        return action == MINE;
+    }
+
+    public boolean isFarm() {
+        return action == FARM;
     }
 
     public String toBaritoneCommand() {
@@ -262,7 +231,8 @@ public class Command implements Serializable {
             command += "farm";
         } else if (isMine()) {
             command += "mine";
-            command += " " + quantity + " " + item;
+            String realItemName = MinecraftHelpers.sanitizeItemName(item);
+            command += " " + quantity + " " + realItemName;
         }
         return command;
     }
@@ -272,10 +242,59 @@ public class Command implements Serializable {
     // ====================================================
 
     // ====================================================
+    // region<Custom Commands>
+
+    public boolean isCraft() {
+        return action == CRAFT;
+    }
+
+    public boolean isSmelt() {
+        return action == SMELT;
+    }
+
+    // endregion
+    // ====================================================
+
+
+    // ====================================================
     // region<World commands>
 
     public boolean isWorldCommand() {
         return this.action.type == WORLD;
+    }
+
+    public boolean isCreate() {
+        return action == CREATE;
+    }
+
+    public boolean isLoad() {
+        return action == LOAD;
+    }
+
+    public boolean isReload() {
+        return action == RELOAD;
+    }
+
+    public boolean isUnload() {
+        return action == UNLOAD;
+    }
+
+    // endregion
+    // ====================================================
+
+    // ====================================================
+    // region<Mission Commands>
+
+    public boolean isMissionCommand() {
+        return this.action.type == MISSION;
+    }
+
+    public boolean isStart() {
+        return action == START;
+    }
+
+    public boolean isStop() {
+        return action == STOP;
     }
 
 
