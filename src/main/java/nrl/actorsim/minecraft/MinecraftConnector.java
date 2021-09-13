@@ -1,24 +1,29 @@
 package nrl.actorsim.minecraft;
 
 import baritone.api.BaritoneAPI;
+import io.netty.buffer.Unpooled;
 import net.fabricmc.api.EnvType;
+import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents;
+import net.fabricmc.fabric.api.network.ClientSidePacketRegistry;
+import net.fabricmc.fabric.api.network.ServerSidePacketRegistry;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.TitleScreen;
-import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.options.KeyBinding;
 import net.minecraft.client.util.InputUtil;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
+import net.minecraft.network.PacketByteBuf;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.util.Identifier;
 import net.minecraft.world.SaveProperties;
 import net.minecraft.world.level.LevelInfo;
 import org.lwjgl.glfw.GLFW;
@@ -30,6 +35,9 @@ import static nrl.actorsim.minecraft.Command.Result.SENT_TO_BARITONE;
 
 public class MinecraftConnector {
     final static org.slf4j.Logger logger = LoggerFactory.getLogger(MinecraftConnector.class);
+    final static String CONNECTOR_NAMESPACE = "nrl.actorsim.minecraft";
+
+    public static Identifier INVENTORY_CHANGE_ID = new Identifier(CONNECTOR_NAMESPACE, "inventory-change");
 
     private static MinecraftConnector instance;
     private static MemcachedServer memcachedServer;
@@ -40,17 +48,22 @@ public class MinecraftConnector {
     private MinecraftClient minecraftClient;
     private ServerWorld serverWorld;
 
-    public static void reset() {
-        initInstance();
+    public static void initInstanceIfNeeded() {
+        if (instance == null) {
+            instance = new MinecraftConnector();
+        }
+    }
+
+    public static void initServerInstance() {
+        initInstanceIfNeeded();
+        instance.initializeServerInventoryListener();
         instance.state = ConnectorState.NOT_LOADED;
     }
 
-    private static void initInstance() {
-        if (instance == null) {
-            instance = new MinecraftConnector();
-            instance.registerClientEvents();
-            instance.registerServerAndWorldEvents();
-        }
+    public static void initClientInstance() {
+        initInstanceIfNeeded();
+        instance.registerClientEvents();
+        instance.registerServerAndWorldEvents();
         if (memcachedServer == null) {
             try {
                 memcachedServer = new MemcachedServer();
@@ -59,8 +72,8 @@ public class MinecraftConnector {
             } catch (IOException | InterruptedException e) {
                 e.printStackTrace();
             }
-
         }
+        instance.state = ConnectorState.NOT_LOADED;
     }
 
     public static void addServer(MinecraftServer server) {
@@ -116,7 +129,7 @@ public class MinecraftConnector {
     }
 
     // ====================================================
-    // region<Register methods>
+    // region<Register client methods>
 
     private void registerClientEvents() {
         ClientLifecycleEvents.CLIENT_STARTED.register(MinecraftConnector::addClient);
@@ -150,6 +163,8 @@ public class MinecraftConnector {
      *
      */
     private void testFunction() {
+        Item item = MinecraftHelpers.findBestItemMatch("iron", Command.ActionName.MINE);
+        sendGivePlayerInventoryMessage(item, 1, -1);
     }
 
     // endregion
@@ -271,24 +286,46 @@ public class MinecraftConnector {
         switch (command.action) {
             case GIVE:
                 Item item = MinecraftHelpers.findBestItemMatch(command);
-                givePlayer(item, command.quantity, command.inventory_slot_start);
+                sendGivePlayerInventoryMessage(item, command.quantity, command.inventory_slot_start);
                 break;
             case CLEAR:
-                clearPlayerInventory();
+                sendClearPlayerInventoryMessage();
         }
     }
 
-    private void givePlayer(Item item, Integer quantity, Integer inventory_position_start) {
-        ClientPlayerEntity player = minecraftClient.player;
-        PlayerInventory inventory = player.inventory;
+    @Environment(EnvType.CLIENT)
+    private void sendGivePlayerInventoryMessage(Item item, Integer quantity, Integer inventory_position_start) {
         ItemStack stack = new ItemStack(item, quantity);
-        inventory.insertStack(inventory_position_start, stack);
+
+        PacketByteBuf passedData = new PacketByteBuf(Unpooled.buffer());
+        passedData.writeEnumConstant(Command.ActionName.GIVE);
+        passedData.writeItemStack(stack);
+        passedData.writeInt(inventory_position_start);
+        ClientSidePacketRegistry.INSTANCE.sendToServer(INVENTORY_CHANGE_ID, passedData);
     }
 
-    private void clearPlayerInventory() {
-        ClientPlayerEntity player = minecraftClient.player;
-        PlayerInventory inventory = player.inventory;
-        inventory.clear();
+    @Environment(EnvType.CLIENT)
+    private void sendClearPlayerInventoryMessage() {
+        PacketByteBuf passedData = new PacketByteBuf(Unpooled.buffer());
+        passedData.writeEnumConstant(Command.ActionName.CLEAR);
+        ClientSidePacketRegistry.INSTANCE.sendToServer(INVENTORY_CHANGE_ID, passedData);
+    }
+
+    void initializeServerInventoryListener() {
+        ServerSidePacketRegistry.INSTANCE.register(INVENTORY_CHANGE_ID, (packetContext, attachedData) -> {
+            Command.ActionName action = attachedData.readEnumConstant(Command.ActionName.class);
+            PlayerEntity player = packetContext.getPlayer();
+            PlayerInventory inventory = player.inventory;
+            if (action == Command.ActionName.CLEAR) {
+                packetContext.getTaskQueue().execute(inventory::clear);
+            } else {  // action is "GIVE"
+                ItemStack stack = attachedData.readItemStack();
+                int inventory_position_start = attachedData.readInt();
+                packetContext.getTaskQueue().execute(() -> {
+                    inventory.insertStack(inventory_position_start, stack);
+                });
+            }
+        });
     }
 
 

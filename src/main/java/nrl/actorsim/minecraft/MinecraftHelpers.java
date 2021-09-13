@@ -27,13 +27,15 @@ public class MinecraftHelpers {
     }
 
     public static Item findBestItemMatch(Command command) {
-        Optional<Item> exactMatch = findExactMatch(command.item);
+        return findBestItemMatch(command.item, command.action);
+    }
+
+    public static Item findBestItemMatch(String item, Command.ActionName context) {
+        Optional<Item> exactMatch = findExactMatch(item);
         if (exactMatch.isPresent()) {
             return exactMatch.get();
         }
 
-        String item = command.item;
-        Command.ActionName context = command.action;
         switch (context) {
             case MINE:
                 switch (item) {
@@ -45,6 +47,8 @@ public class MinecraftHelpers {
                         return Items.OAK_LOG;
                     case "wood":
                         return Items.OAK_LOG;
+                    case "coal":
+                        return Items.COAL_ORE;
                 }
             case CRAFT:
             case GIVE:
@@ -53,6 +57,8 @@ public class MinecraftHelpers {
                         return Items.IRON_INGOT;
                     case "diamond":
                         return Items.DIAMOND;
+                    case "coal":
+                        return Items.COAL;
                 }
             default:
                 switch (item) {
@@ -66,6 +72,8 @@ public class MinecraftHelpers {
                         return Items.OAK_PLANKS;
                     case "planks":
                         return Items.OAK_PLANKS;
+                    case "pickaxe":
+                        return Items.IRON_PICKAXE;
                 }
         }
         return Registry.ITEM.stream()

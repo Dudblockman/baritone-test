@@ -28,7 +28,6 @@ public class ExampleClientEntrypoint implements ClientModInitializer {
                 client.player.sendMessage(new LiteralText("Key 1 was pressed!"), false);
             }
         });
-        MinecraftConnector.reset();
+        MinecraftConnector.initClientInstance();
     }
-
 }

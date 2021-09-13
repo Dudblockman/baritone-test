@@ -1,6 +1,7 @@
 package net.fabricmc.example;
 
 import net.fabricmc.api.ModInitializer;
+import nrl.actorsim.minecraft.MinecraftConnector;
 
 public class ExampleMod implements ModInitializer {
 	@Override
@@ -11,5 +12,7 @@ public class ExampleMod implements ModInitializer {
 		// Proceed with mild caution.
 
 		System.out.println("Hello Fabric world!");
+
+		MinecraftConnector.initServerInstance();
 	}
 }

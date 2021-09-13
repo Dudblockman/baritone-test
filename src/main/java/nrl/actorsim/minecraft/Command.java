@@ -2,6 +2,7 @@ package nrl.actorsim.minecraft;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import net.minecraft.item.Item;
 import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
@@ -37,6 +38,9 @@ public class Command implements Serializable {
         MINE(BARITONE),
         FARM(BARITONE),
 
+        CANCEL(CUSTOM),
+        //PAUSE(CUSTOM), // pauses the current command
+        //RESUME(CUSTOM), // resumes the previous command that was paused
         CRAFT(CUSTOM),
         SMELT(CUSTOM),
 
@@ -231,8 +235,12 @@ public class Command implements Serializable {
             command += "farm";
         } else if (isMine()) {
             command += "mine";
-            String realItemName = MinecraftHelpers.sanitizeItemName(item);
-            command += " " + quantity + " " + realItemName;
+            String itemName = item;
+            Item realItem = MinecraftHelpers.findBestItemMatch(this);
+            if (realItem != null) {
+                itemName = realItem.getTranslationKey();
+            }
+            command += " " + quantity + " " + itemName;
         }
         return command;
     }
@@ -243,6 +251,10 @@ public class Command implements Serializable {
 
     // ====================================================
     // region<Custom Commands>
+
+    public boolean isCancel() {
+        return action == CANCEL;
+    }
 
     public boolean isCraft() {
         return action == CRAFT;
