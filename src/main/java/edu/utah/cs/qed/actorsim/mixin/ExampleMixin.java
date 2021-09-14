@@ -1,4 +1,4 @@
-package net.fabricmc.example.mixin;
+package edu.utah.cs.qed.actorsim.mixin;
 
 import baritone.api.BaritoneAPI;
 import net.minecraft.client.gui.screen.TitleScreen;

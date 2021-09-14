@@ -19,10 +19,10 @@
   "environment": "*",
   "entrypoints": {
     "main": [
-      "net.fabricmc.example.ExampleMod"
+      "edu.utah.cs.qed.actorsim.ActorSimMod"
     ],
     "client": [
-      "net.fabricmc.example.ExampleClientEntrypoint"
+      "edu.utah.cs.qed.actorsim.ExampleClientEntrypoint"
     ]
   },
   "mixins": [

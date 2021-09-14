@@ -1,4 +1,4 @@
-package net.fabricmc.example;
+package edu.utah.cs.qed.actorsim;
 
 import baritone.api.BaritoneAPI;
 import net.fabricmc.api.ClientModInitializer;

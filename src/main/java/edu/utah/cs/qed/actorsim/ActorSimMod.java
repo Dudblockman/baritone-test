@@ -1,9 +1,9 @@
-package net.fabricmc.example;
+package edu.utah.cs.qed.actorsim;
 
 import net.fabricmc.api.ModInitializer;
 import nrl.actorsim.minecraft.MinecraftConnector;
 
-public class ExampleMod implements ModInitializer {
+public class ActorSimMod implements ModInitializer {
 	@Override
 	public void onInitialize() {
 		System.out.println("Initialize ActorSim's Minecraft Mod");
