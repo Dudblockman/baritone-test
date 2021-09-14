@@ -2,12 +2,15 @@ package nrl.actorsim.minecraft;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import net.minecraft.item.BlockItem;
 import net.minecraft.item.Item;
+import net.minecraft.util.registry.Registry;
 import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Locale;
 
 import static nrl.actorsim.minecraft.Command.ActionName.*;
 import static nrl.actorsim.minecraft.Command.CommandType.*;
@@ -34,15 +37,17 @@ public class Command implements Serializable {
 
     enum ActionName {
         UNSPECIFIED(INVALID),
+
+        STOP(BARITONE),
         GOTO(BARITONE),
         MINE(BARITONE),
         FARM(BARITONE),
 
-        CANCEL(CUSTOM),
-        //PAUSE(CUSTOM), // pauses the current command
-        //RESUME(CUSTOM), // resumes the previous command that was paused
         CRAFT(CUSTOM),
         SMELT(CUSTOM),
+        //CANCEL(CUSTOM),
+        //PAUSE(CUSTOM), // pauses the current command
+        //RESUME(CUSTOM), // resumes the previous command that was paused
 
         CREATE(WORLD),
         LOAD(WORLD),
@@ -50,15 +55,17 @@ public class Command implements Serializable {
         UNLOAD(WORLD),
 
         //Proposed mission commands
-        START(MISSION),
-        STOP(MISSION),
         GIVE(MISSION),
-        CLEAR(MISSION);
+        CLEAR(MISSION),
+        SWAP_TO_OFFHAND(MISSION);
 
         public CommandType type;
 
         ActionName(CommandType type) {
             this.type = type;
+        }
+        public boolean matches(String commandString) {
+            return type.name().toLowerCase(Locale.ROOT).replace("_","").equals(commandString);
         }
     }
 
@@ -67,7 +74,7 @@ public class Command implements Serializable {
     public Integer id;
     public ActionName action;
 
-    //NB: some commands accept [quantity] item; for example "craft 2 sticks" or "mine 3 iron_ore"
+    //NB: some commands optionally accept quantity; for example "craft sticks 2" or "mine iron_ore 3"
     public Integer quantity;
     public String item;
     public Integer inventory_slot_start;
@@ -207,6 +214,10 @@ public class Command implements Serializable {
         return this.action.type == BARITONE;
     }
 
+    public boolean isStop() {
+        return action == STOP;
+    }
+
     public boolean isGoto() {
         return action == GOTO;
     }
@@ -221,7 +232,9 @@ public class Command implements Serializable {
 
     public String toBaritoneCommand() {
         String command = "";
-        if (isGoto()) {
+        if (isStop()) {
+            command = "stop";
+        } else if (isGoto()) {
             command += "goto";
             String xString = " " + x.toString();
             String zString = " " + z.toString();
@@ -237,10 +250,11 @@ public class Command implements Serializable {
             command += "mine";
             String itemName = item;
             Item realItem = MinecraftHelpers.findBestItemMatch(this);
-            if (realItem != null) {
-                itemName = realItem.getTranslationKey();
+            if (realItem instanceof BlockItem) {
+                itemName = Registry.BLOCK.getId(((BlockItem) realItem).getBlock()).toString();
+
             }
-            command += " " + quantity + " " + itemName;
+            command += " " + itemName;
         }
         return command;
     }
@@ -252,9 +266,9 @@ public class Command implements Serializable {
     // ====================================================
     // region<Custom Commands>
 
-    public boolean isCancel() {
-        return action == CANCEL;
-    }
+//    public boolean isCancel() {
+//        return action == CANCEL;
+//    }
 
     public boolean isCraft() {
         return action == CRAFT;
@@ -301,17 +315,16 @@ public class Command implements Serializable {
         return this.action.type == MISSION;
     }
 
-    public boolean isStart() {
-        return action == START;
-    }
-
-    public boolean isStop() {
-        return action == STOP;
-    }
-
-
     // endregion
     // ====================================================
 
+    // ====================================================
+    // region<Custom Commands>
+    public boolean isCustomCommand() {
+        return this.action.type == CUSTOM;
+    }
+
+    // endregion
+    // ====================================================
 
 }

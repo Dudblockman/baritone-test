@@ -13,6 +13,6 @@ public class ExampleMod implements ModInitializer {
 
 		System.out.println("Hello Fabric world!");
 
-		MinecraftConnector.initServerInstance();
+		MinecraftConnector.getInstance().initServerInstance();
 	}
 }

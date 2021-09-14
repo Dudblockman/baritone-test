@@ -1,2 +1,8 @@
+# name should be a single word with no spaces; it is case sensitive
+name=Test
+
+#seed is any string or integer
 seed=-6479230070218025543
+
+#home is where you want the character to start upon entering the world
 home=[-172, 68, -25]

@@ -7,31 +7,47 @@ import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents;
-import net.fabricmc.fabric.api.network.ClientSidePacketRegistry;
-import net.fabricmc.fabric.api.network.ServerSidePacketRegistry;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.block.Block;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.TitleScreen;
+import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.options.KeyBinding;
 import net.minecraft.client.util.InputUtil;
-import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.client.world.ClientWorld;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.network.PacketByteBuf;
+import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.world.ServerWorld;
+import net.minecraft.util.ActionResult;
+import net.minecraft.util.Hand;
 import net.minecraft.util.Identifier;
+import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
+import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.LightType;
 import net.minecraft.world.SaveProperties;
 import net.minecraft.world.level.LevelInfo;
+import nrl.actorsim.utils.WorkerThread;
+import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.LinkedList;
+import java.util.Optional;
+import java.util.Queue;
 
+import static nrl.actorsim.minecraft.Command.ActionName.*;
 import static nrl.actorsim.minecraft.Command.Result.SENT_TO_BARITONE;
+import static nrl.actorsim.minecraft.Command.Result.SUCCESS;
 
 public class MinecraftConnector {
     final static org.slf4j.Logger logger = LoggerFactory.getLogger(MinecraftConnector.class);
@@ -46,24 +62,31 @@ public class MinecraftConnector {
 
     private MinecraftServer minecraftServer;
     private MinecraftClient minecraftClient;
-    private ServerWorld serverWorld;
 
-    public static void initInstanceIfNeeded() {
+    final Queue<Command> commandQueue = new LinkedList<>();
+    Optional<Command> currentCommand = Optional.empty();
+    Optional<Command> stopCommand = Optional.empty();
+    ConnectorWorker worker;
+
+
+    private MinecraftConnector() {
+    }
+
+    public static MinecraftConnector getInstance() {
         if (instance == null) {
             instance = new MinecraftConnector();
         }
+        return instance;
     }
 
-    public static void initServerInstance() {
-        initInstanceIfNeeded();
+    public void initServerInstance() {
         instance.initializeServerInventoryListener();
         instance.state = ConnectorState.NOT_LOADED;
     }
 
-    public static void initClientInstance() {
-        initInstanceIfNeeded();
-        instance.registerClientEvents();
-        instance.registerServerAndWorldEvents();
+    public void initClientInstance() {
+        registerClientEvents();
+        registerServerAndWorldEvents();
         if (memcachedServer == null) {
             try {
                 memcachedServer = new MemcachedServer();
@@ -73,7 +96,14 @@ public class MinecraftConnector {
                 e.printStackTrace();
             }
         }
-        instance.state = ConnectorState.NOT_LOADED;
+        WorkerThread.Options options = WorkerThread.Options.builder()
+                .shortName("MCC")
+                .workerLock(commandQueue)
+                .build();
+        worker = new ConnectorWorker(options);
+        worker.start();
+
+        state = ConnectorState.NOT_LOADED;
     }
 
     public static void addServer(MinecraftServer server) {
@@ -93,17 +123,6 @@ public class MinecraftConnector {
             instance.minecraftClient = null;
         }
         instance.minecraftClient = client;
-    }
-
-    private MinecraftConnector() {
-
-    }
-
-    public static void addWorld(MinecraftServer minecraftServer, ServerWorld serverWorld) {
-        if (serverWorld != null) {
-            instance.serverWorld = null;
-        }
-        instance.serverWorld = serverWorld;
     }
 
     public static void addClient(MinecraftClient minecraftClient) {
@@ -129,6 +148,68 @@ public class MinecraftConnector {
     }
 
     // ====================================================
+    // region<CommandQueue and ConnectorWorker >
+
+    boolean enqueue(Command command) {
+        logger.info("Enqueuing command {}", command);
+        boolean result;
+        if (command.isStop()) {
+            stopCommand = Optional.of(command);
+        }
+        synchronized (commandQueue) {
+            result = commandQueue.offer(command);
+        }
+        worker.notifyWorkerThereIsWork();
+        return result;
+    }
+
+    class ConnectorWorker extends WorkerThread {
+        protected ConnectorWorker(Options options) {
+            super(options);
+        }
+
+        @Override
+        public WorkResult performWork() {
+            if (stopCommand.isPresent()) {
+                MinecraftConnector.this.run(stopCommand.get());
+            } else {
+                if (currentCommand.isPresent()
+                        && currentCommand.get().isFinishedExecuting()) {
+                    currentCommand = Optional.empty();
+                }
+                if (!currentCommand.isPresent()) {
+                    Command command = getNextCommand();
+                    if (command != null) {
+                        currentCommand = Optional.of(command);
+                        MinecraftConnector.this.run(command);
+                    }
+                }
+            }
+            return WorkResult.CONTINUE;
+        }
+
+        @Nullable
+        private Command getNextCommand() {
+            Command command = null;
+            synchronized (commandQueue) {
+                if (!commandQueue.isEmpty()) {
+                    command = commandQueue.remove();
+                }
+            }
+            return command;
+        }
+    }
+
+    private void setSuccessAndNotify(Command command) {
+        command.setResult(SUCCESS);
+        worker.notifyWorkerThereIsWork();
+    }
+
+    // endregion
+    // ====================================================
+
+
+    // ====================================================
     // region<Register client methods>
 
     private void registerClientEvents() {
@@ -140,7 +221,6 @@ public class MinecraftConnector {
     private void registerServerAndWorldEvents() {
         ServerLifecycleEvents.SERVER_STARTING.register(MinecraftConnector::addServer);
         ServerLifecycleEvents.SERVER_STOPPED.register(MinecraftConnector::removeServer);
-        ServerWorldEvents.LOAD.register(MinecraftConnector::addWorld);
 
         KeyBinding keyBinding = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.examplemod.stoptest", // The translation key of the keybinding's name
@@ -163,8 +243,23 @@ public class MinecraftConnector {
      *
      */
     private void testFunction() {
-        Item item = MinecraftHelpers.findBestItemMatch("iron", Command.ActionName.MINE);
-        sendGivePlayerInventoryMessage(item, 1, -1);
+        if (playerLightLevelAtOrAbove(7)) {
+            return;
+        }
+        placeTorchAtPlayerFeet();
+    }
+
+
+    // endregion
+    // ====================================================
+
+    // ====================================================
+    // region<World State>
+    public boolean playerLightLevelAtOrAbove(int value) {
+        BlockPos playerStanding = new BlockPos(minecraftClient.player.getPos());
+        int currentLightLevel = minecraftClient.world.getLightLevel(LightType.BLOCK, playerStanding);
+        logger.debug("The current light level is {}", currentLightLevel);
+        return value <= currentLightLevel;
     }
 
     // endregion
@@ -172,23 +267,32 @@ public class MinecraftConnector {
 
 
     public void run(Command command) {
+        if (command.isStop()) {
+            currentCommand = Optional.empty();
+            stopCommand = Optional.empty();
+        }
         if (command.isWorldCommand()) {
             doWorldCommand(command);
         } else if (command.isBaritoneCommand()) {
             sendBaritoneCommand(command);
         } else if (command.isMissionCommand()) {
             doMissionCommand(command);
+        } else if (command.isCustomCommand()) {
+            doCustomCommand(command);
         }
     }
 
     public void sendBaritoneCommand(Command command) {
         String commandString = command.toBaritoneCommand();
         logger.info("Running Command string '{}' from command {}", commandString, command);
-        boolean commandResult = BaritoneAPI.getProvider().getPrimaryBaritone().getCommandManager().execute(commandString);
-        if (commandResult) {
-            command.setResult(SENT_TO_BARITONE);
-        }
+        minecraftClient.execute(() -> {
+            boolean commandResult = BaritoneAPI.getProvider().getPrimaryBaritone().getCommandManager().execute(commandString);
+            if (commandResult) {
+                command.setResult(SENT_TO_BARITONE);
+            }
+        });
     }
+
 
     // ====================================================
     // region<World Commands>
@@ -198,14 +302,17 @@ public class MinecraftConnector {
             case CREATE:
                 logger.info("loading world {}", command.world_name);
                 create(command.world_name, command.world_seed);
+                setSuccessAndNotify(command);
                 break;
             case LOAD:
                 logger.info("loading world {}", command.world_name);
                 load(command.world_name);
+                setSuccessAndNotify(command);
                 break;
             case UNLOAD:
                 logger.info("unloading world");
                 unload();
+                setSuccessAndNotify(command);
                 break;
             case RELOAD:
                 SaveProperties properties = minecraftServer.getSaveProperties();
@@ -213,13 +320,9 @@ public class MinecraftConnector {
                 String worldName = levelInfo.getLevelName();
                 logger.info("Reloading current world {}", worldName);
                 load(worldName);
+                setSuccessAndNotify(command);
                 break;
         }
-    }
-
-    public Command.Result loadWorld(Command command) {
-        this.load(command.world_name);
-        return Command.Result.EXECUTING;
     }
 
     private void killServer() {
@@ -249,10 +352,7 @@ public class MinecraftConnector {
 
     void unload() {
         if (minecraftClient != null) {
-            MinecraftClient.getInstance().execute(() -> {
-                MinecraftConnector.this.unload_impl();
-                state = ConnectorState.NOT_LOADED;
-            });
+            MinecraftClient.getInstance().execute(MinecraftConnector.this::unload_impl);
         }
     }
 
@@ -286,51 +386,156 @@ public class MinecraftConnector {
         switch (command.action) {
             case GIVE:
                 Item item = MinecraftHelpers.findBestItemMatch(command);
-                sendGivePlayerInventoryMessage(item, command.quantity, command.inventory_slot_start);
+                sendInventoryMessageGive(item, command.quantity, command.inventory_slot_start);
+                setSuccessAndNotify(command);
                 break;
             case CLEAR:
-                sendClearPlayerInventoryMessage();
+                sendInventoryMessageClear();
+                setSuccessAndNotify(command);
+                break;
         }
-    }
-
-    @Environment(EnvType.CLIENT)
-    private void sendGivePlayerInventoryMessage(Item item, Integer quantity, Integer inventory_position_start) {
-        ItemStack stack = new ItemStack(item, quantity);
-
-        PacketByteBuf passedData = new PacketByteBuf(Unpooled.buffer());
-        passedData.writeEnumConstant(Command.ActionName.GIVE);
-        passedData.writeItemStack(stack);
-        passedData.writeInt(inventory_position_start);
-        ClientSidePacketRegistry.INSTANCE.sendToServer(INVENTORY_CHANGE_ID, passedData);
-    }
-
-    @Environment(EnvType.CLIENT)
-    private void sendClearPlayerInventoryMessage() {
-        PacketByteBuf passedData = new PacketByteBuf(Unpooled.buffer());
-        passedData.writeEnumConstant(Command.ActionName.CLEAR);
-        ClientSidePacketRegistry.INSTANCE.sendToServer(INVENTORY_CHANGE_ID, passedData);
-    }
-
-    void initializeServerInventoryListener() {
-        ServerSidePacketRegistry.INSTANCE.register(INVENTORY_CHANGE_ID, (packetContext, attachedData) -> {
-            Command.ActionName action = attachedData.readEnumConstant(Command.ActionName.class);
-            PlayerEntity player = packetContext.getPlayer();
-            PlayerInventory inventory = player.inventory;
-            if (action == Command.ActionName.CLEAR) {
-                packetContext.getTaskQueue().execute(inventory::clear);
-            } else {  // action is "GIVE"
-                ItemStack stack = attachedData.readItemStack();
-                int inventory_position_start = attachedData.readInt();
-                packetContext.getTaskQueue().execute(() -> {
-                    inventory.insertStack(inventory_position_start, stack);
-                });
-            }
-        });
     }
 
 
     // endregion
     // ====================================================
+
+    // ====================================================
+    // region<Custom Commands>
+    private void doCustomCommand(Command command) {
+        switch (command.action) {
+            case CRAFT:
+                //TODO Gardone: here's where you link to your crafting code; for now it just gives the item without checking
+                Item item = MinecraftHelpers.findBestItemMatch(command);
+                sendInventoryMessageGive(item, command.quantity, command.inventory_slot_start);
+                setSuccessAndNotify(command);
+                break;
+            case SMELT:
+                //TODO Gardone: here's where you link to your smelting code; for now it just gives the item without checking
+                item = MinecraftHelpers.findBestItemMatch(command);
+                sendInventoryMessageGive(item, command.quantity, command.inventory_slot_start);
+                setSuccessAndNotify(command);
+                break;
+        }
+    }
+
+    // endregion
+    // ====================================================
+
+
+    // ====================================================
+    // region<Torch Helpers>
+
+    private void placeTorchAtPlayerFeet() {
+        BlockPos playerStanding = new BlockPos(minecraftClient.player.getPos());
+        if (canPlaceTorchAtBottomOf(playerStanding)) {
+            attemptPlaceTorchAt(playerStanding);
+        }
+    }
+
+    public boolean canPlaceTorchAtBottomOf(BlockPos blockPos) {
+        return (minecraftClient.world.getBlockState(blockPos).getFluidState().isEmpty() &&
+                Block.sideCoversSmallSquare(minecraftClient.world, blockPos.down(), Direction.UP));
+    }
+
+    private void attemptPlaceTorchAt(BlockPos blockPos) {
+        ClientPlayerEntity player = minecraftClient.player;
+        ClientWorld world = minecraftClient.world;
+        //cheat by sending a "look" to the server without updating the client state
+        PlayerMoveC2SPacket.LookOnly packet = new PlayerMoveC2SPacket.LookOnly(player.getYaw(0), 90.0F, true);
+        player.networkHandler.sendPacket(packet);
+
+        Vec3d bottomFace = Vec3d.ofBottomCenter(blockPos);
+        BlockHitResult blockHitResult = new BlockHitResult(bottomFace, Direction.DOWN, blockPos, false);
+        if (moveToOffHand(Items.TORCH)) {
+            Hand hand = Hand.OFF_HAND;
+            ActionResult one = minecraftClient.interactionManager.interactBlock(player, world, hand, blockHitResult);
+            ActionResult two = minecraftClient.interactionManager.interactItem(player, world, hand);
+            if (one.isAccepted() && two.isAccepted()) {
+                logger.info("placed a torch");
+            }
+        }
+    }
+
+    // endregion
+    // ====================================================
+
+
+    // ====================================================
+    // region<Inventory Control>
+
+    private boolean moveToOffHand(Item item) {
+        ClientPlayerEntity player = minecraftClient.player;
+        PlayerInventory inventory =  player.inventory;
+        boolean torchInOffHand = false;
+        if (player.getOffHandStack().getItem().equals(item)) {
+            torchInOffHand = true;
+        } else if (player.getOffHandStack().isEmpty()) {
+            ItemStack stack = new ItemStack(item);
+            int index = inventory.getSlotWithStack(stack);
+            if (index >= 0) {
+                sendInventoryMessageSwapToHotbar(index);
+                torchInOffHand = true;
+            }
+        }
+        return torchInOffHand;
+    }
+
+    @Environment(EnvType.CLIENT)
+    private void sendInventoryMessageGive(Item item, Integer quantity, Integer inventory_position_start) {
+        ItemStack stack = new ItemStack(item, quantity);
+
+        PacketByteBuf buffer = new PacketByteBuf(Unpooled.buffer());
+        buffer.writeEnumConstant(Command.ActionName.GIVE);
+        buffer.writeItemStack(stack);
+        buffer.writeInt(inventory_position_start);
+        ClientPlayNetworking.send(INVENTORY_CHANGE_ID, buffer);
+    }
+
+    @Environment(EnvType.CLIENT)
+    private void sendInventoryMessageClear() {
+        PacketByteBuf buffer = new PacketByteBuf(Unpooled.buffer());
+        buffer.writeEnumConstant(CLEAR);
+        ClientPlayNetworking.send(INVENTORY_CHANGE_ID, buffer);
+    }
+
+    @Environment(EnvType.CLIENT)
+    private void sendInventoryMessageSwapToHotbar(int index) {
+        PacketByteBuf buffer = new PacketByteBuf(Unpooled.buffer());
+        buffer.writeEnumConstant(Command.ActionName.SWAP_TO_OFFHAND);
+        buffer.writeInt(index);
+        ClientPlayNetworking.send(INVENTORY_CHANGE_ID, buffer);
+    }
+
+
+
+    void initializeServerInventoryListener() {
+        ServerPlayNetworking.registerGlobalReceiver(INVENTORY_CHANGE_ID, (server, player, handler, buf, responseSender) -> {
+            Command.ActionName action = buf.readEnumConstant(Command.ActionName.class);
+            PlayerInventory inventory = player.inventory;
+            if (action == CLEAR) {
+                server.execute(inventory::clear);
+            } else if (action == GIVE) {
+                ItemStack stack = buf.readItemStack();
+                int inventory_position_start = buf.readInt();
+                server.execute(() -> {
+                    inventory.insertStack(inventory_position_start, stack);
+                });
+            } else if (action == SWAP_TO_OFFHAND) {
+                int index = buf.readInt();
+                server.execute(() -> {
+                    ItemStack toPlace = inventory.main.get(index);
+                    ItemStack inOffHand = inventory.offHand.isEmpty() ? ItemStack.EMPTY : inventory.offHand.get(0);
+                    player.inventory.offHand.set(0, toPlace);
+                    player.inventory.setStack(index, inOffHand);
+                });
+            }
+        });
+    }
+
+    // endregion
+    // ====================================================
+
 
     public enum ConnectorState {
         NOT_LOADED,

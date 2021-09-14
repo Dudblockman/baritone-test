@@ -1,5 +1,6 @@
 package nrl.actorsim.minecraft;
 
+import net.minecraft.block.Blocks;
 import net.minecraft.item.Item;
 import net.minecraft.item.Items;
 import net.minecraft.util.registry.Registry;
@@ -40,18 +41,18 @@ public class MinecraftHelpers {
             case MINE:
                 switch (item) {
                     case "iron":
-                        return Items.IRON_ORE;
+                        return Blocks.IRON_ORE.asItem();
                     case "diamond":
-                        return Items.DIAMOND_ORE;
+                        return Blocks.DIAMOND_ORE.asItem();
                     case "log":
-                        return Items.OAK_LOG;
                     case "wood":
-                        return Items.OAK_LOG;
+                        return Blocks.OAK_LOG.asItem();
                     case "coal":
-                        return Items.COAL_ORE;
+                        return Blocks.COAL_ORE.asItem();
                 }
             case CRAFT:
             case GIVE:
+            case SMELT:
                 switch (item) {
                     case "iron":
                         return Items.IRON_INGOT;
@@ -74,6 +75,14 @@ public class MinecraftHelpers {
                         return Items.OAK_PLANKS;
                     case "pickaxe":
                         return Items.IRON_PICKAXE;
+                    case "shovel":
+                        return Items.IRON_SHOVEL;
+                    case "beef":
+                        return Items.COOKED_BEEF;
+                    case "chicken":
+                        return Items.COOKED_CHICKEN;
+                    case "fish":
+                        return Items.COOKED_COD;
                 }
         }
         return Registry.ITEM.stream()

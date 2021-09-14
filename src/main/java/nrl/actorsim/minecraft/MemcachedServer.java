@@ -64,7 +64,7 @@ public class MemcachedServer extends WorkerThread {
         start();
         setWakeUpCall(INIT_TIMEOUT);
 
-        //get rid of annoying messages from WorkerThread!
+        //get rid of annoying messages from MemcachedClient's WorkerThread!
         ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(WorkerThread.class)).setLevel(Level.INFO);
     }
 
@@ -179,7 +179,7 @@ public class MemcachedServer extends WorkerThread {
     }
 
     private void runCommand(Command command) {
-        minecraftConnector.run(command);
+        minecraftConnector.enqueue(command);
         if (isBaritoneTestMode) {
             currentCommandStart = Instant.now();
         }
