@@ -18,13 +18,16 @@ import static nrl.actorsim.minecraft.Command.Result.*;
 
 public class Command implements Serializable {
     final static org.slf4j.Logger logger = LoggerFactory.getLogger(Command.class);
-
     public enum Result {
         UNKNOWN,
+        ENQUEUE_SUCCESS,
+        ENQUEUE_FAIL,
         SENT_TO_BARITONE,
         EXECUTING,
+        PAUSED,
         SUCCESS,
-        FAIL
+        FAIL,
+        STOPPED;
     }
 
     enum CommandType {
@@ -45,9 +48,10 @@ public class Command implements Serializable {
 
         CRAFT(CUSTOM),
         SMELT(CUSTOM),
-        //CANCEL(CUSTOM),
-        //PAUSE(CUSTOM), // pauses the current command
-        //RESUME(CUSTOM), // resumes the previous command that was paused
+        CANCEL(CUSTOM), // cancels all commands, queued, active or paused
+        PAUSE(CUSTOM), // pauses the current command
+        RESUME(CUSTOM), // resumes the previous command that was paused
+        TICK(CUSTOM), //sets the tick rate specified by quantity
 
         CREATE(WORLD),
         LOAD(WORLD),
@@ -137,6 +141,18 @@ public class Command implements Serializable {
 
     public void setResult(Result result) {
         this.result = result;
+    }
+
+    public void setResultToStopped() {
+        this.result = STOPPED;
+    }
+
+    public void setResultToExecuting() {
+        this.result = EXECUTING;
+    }
+
+    public void setResultToPaused() {
+        this.result = PAUSED;
     }
 
     public boolean isFinishedExecuting() {
@@ -266,9 +282,26 @@ public class Command implements Serializable {
     // ====================================================
     // region<Custom Commands>
 
-//    public boolean isCancel() {
-//        return action == CANCEL;
-//    }
+    public boolean isCancel() {
+        return action == CANCEL;
+    }
+
+    public boolean isPause() {
+        return action == PAUSE;
+    }
+
+    public boolean isResume() {
+        return action == RESUME;
+    }
+
+    public boolean isTick() {
+        return action == TICK;
+    }
+
+    public boolean isInterrupt() {
+        return isStop() || isPause() || isCancel() || isResume();
+    }
+
 
     public boolean isCraft() {
         return action == CRAFT;

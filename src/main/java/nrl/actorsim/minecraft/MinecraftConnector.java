@@ -46,8 +46,7 @@ import java.util.Optional;
 import java.util.Queue;
 
 import static nrl.actorsim.minecraft.Command.ActionName.*;
-import static nrl.actorsim.minecraft.Command.Result.SENT_TO_BARITONE;
-import static nrl.actorsim.minecraft.Command.Result.SUCCESS;
+import static nrl.actorsim.minecraft.Command.Result.*;
 
 public class MinecraftConnector {
     final static org.slf4j.Logger logger = LoggerFactory.getLogger(MinecraftConnector.class);
@@ -65,7 +64,8 @@ public class MinecraftConnector {
 
     final Queue<Command> commandQueue = new LinkedList<>();
     Optional<Command> currentCommand = Optional.empty();
-    Optional<Command> stopCommand = Optional.empty();
+    Optional<Command> pausedCommand = Optional.empty();
+    Optional<Command> interruptCommand = Optional.empty();
     ConnectorWorker worker;
 
 
@@ -150,17 +150,20 @@ public class MinecraftConnector {
     // ====================================================
     // region<CommandQueue and ConnectorWorker >
 
-    boolean enqueue(Command command) {
+    void enqueue(Command command) {
         logger.info("Enqueuing command {}", command);
-        boolean result;
-        if (command.isStop()) {
-            stopCommand = Optional.of(command);
-        }
-        synchronized (commandQueue) {
-            result = commandQueue.offer(command);
+        if (command.isInterrupt()) {
+            interruptCommand = Optional.of(command);
+        } else {
+            synchronized (commandQueue) {
+                if (commandQueue.offer(command)) {
+                    command.setResult(ENQUEUE_SUCCESS);
+                } else {
+                    command.setResult(ENQUEUE_FAIL);
+                }
+            }
         }
         worker.notifyWorkerThereIsWork();
-        return result;
     }
 
     class ConnectorWorker extends WorkerThread {
@@ -170,22 +173,38 @@ public class MinecraftConnector {
 
         @Override
         public WorkResult performWork() {
-            if (stopCommand.isPresent()) {
-                MinecraftConnector.this.run(stopCommand.get());
+            boolean commandWasRun = false;
+            if (interruptCommand.isPresent()) {
+                MinecraftConnector.this.run(interruptCommand.get());
             } else {
-                if (currentCommand.isPresent()
-                        && currentCommand.get().isFinishedExecuting()) {
-                    currentCommand = Optional.empty();
-                }
-                if (!currentCommand.isPresent()) {
-                    Command command = getNextCommand();
-                    if (command != null) {
-                        currentCommand = Optional.of(command);
-                        MinecraftConnector.this.run(command);
-                    }
+                commandWasRun = setCurrentCommandIfQueued();
+            }
+            int queueSize = commandQueue.size();
+            logger.info("Current queue has {} commands:", queueSize);
+            commandQueue.forEach(command -> logger.info("  command:{}", command));
+            if (commandWasRun
+                    && queueSize > 0) {
+                return WorkResult.MORE_WORK;  //cycle to make sure we empty fast running commands
+            } else {
+                return WorkResult.CONTINUE;  //better wait until we are notified
+            }
+        }
+
+        private boolean setCurrentCommandIfQueued() {
+            if (currentCommand.isPresent()
+                    && currentCommand.get().isFinishedExecuting()) {
+                currentCommand = Optional.empty();
+            }
+            boolean commandWasRun = false;
+            if (!currentCommand.isPresent()) {
+                Command command = getNextCommand();
+                if (command != null) {
+                    currentCommand = Optional.of(command);
+                    MinecraftConnector.this.run(command);
+                    commandWasRun = true;
                 }
             }
-            return WorkResult.CONTINUE;
+            return commandWasRun;
         }
 
         @Nullable
@@ -267,18 +286,60 @@ public class MinecraftConnector {
 
 
     public void run(Command command) {
-        if (command.isStop()) {
-            currentCommand = Optional.empty();
-            stopCommand = Optional.empty();
+        if (command.isInterrupt()) {
+            switch (command.action) {
+                case CANCEL:
+                    synchronized (commandQueue) {
+                        commandQueue.clear();
+                    }
+                case STOP:
+                    currentCommand.ifPresent(Command::setResultToStopped);
+                    stopExecutingCurrentCommand();
+                    break;
+                case PAUSE:
+                    currentCommand.ifPresent(Command::setResultToPaused);
+                    pausedCommand = currentCommand;
+                    stopExecutingCurrentCommand();
+                    break;
+                case RESUME:
+                    resumeExecutionOfPausedCommand();
+                    break;
+            }
+            interruptCommand = Optional.empty();
+        } else {
+            if (command.isWorldCommand()) {
+                doWorldCommand(command);
+            } else if (command.isBaritoneCommand()) {
+                sendBaritoneCommand(command);
+            } else if (command.isMissionCommand()) {
+                doMissionCommand(command);
+            } else if (command.isCustomCommand()) {
+                doCustomCommand(command);
+            }
         }
-        if (command.isWorldCommand()) {
-            doWorldCommand(command);
-        } else if (command.isBaritoneCommand()) {
-            sendBaritoneCommand(command);
-        } else if (command.isMissionCommand()) {
-            doMissionCommand(command);
-        } else if (command.isCustomCommand()) {
-            doCustomCommand(command);
+    }
+
+    private void stopExecutingCurrentCommand() {
+        stopBaritoneIfCurrentTask();
+        currentCommand = Optional.empty();
+    }
+
+    private void stopBaritoneIfCurrentTask() {
+        if (currentCommand.isPresent()) {
+            if (currentCommand.get().isBaritoneCommand()) {
+                sendBaritoneCommand(new Command(STOP));
+            }
+        }
+    }
+
+    private void resumeExecutionOfPausedCommand() {
+        currentCommand = pausedCommand;
+        pausedCommand = Optional.empty();
+        if (currentCommand.isPresent()) {
+            currentCommand.get().setResultToExecuting();
+            if (currentCommand.get().isBaritoneCommand()) {
+                sendBaritoneCommand(currentCommand.get());
+            }
         }
     }
 
@@ -415,6 +476,10 @@ public class MinecraftConnector {
                 item = MinecraftHelpers.findBestItemMatch(command);
                 sendInventoryMessageGive(item, command.quantity, command.inventory_slot_start);
                 setSuccessAndNotify(command);
+                break;
+            case TICK:
+                int tickRate = command.quantity;
+                //TODO Logan: here's where you link our tick rate change
                 break;
         }
     }
