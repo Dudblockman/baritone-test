@@ -12,8 +12,9 @@ public class ClientTickAcceleration {
     @Shadow public float lastFrameDuration;
     @Shadow private long prevTimeMillis;
 
+    //TODO make this use proper mixin rather than overwrite
     /**
-     * @author
+     * @author NRL
      */
     @Overwrite
     public int beginRenderTick(long timeMillis) {
