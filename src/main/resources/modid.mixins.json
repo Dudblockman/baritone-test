@@ -4,8 +4,10 @@
   "package": "edu.utah.cs.qed.actorsim.mixin",
   "compatibilityLevel": "JAVA_8",
   "mixins": [
+    "ServerTickAcceleration"
   ],
   "client": [
+    "ClientTickAcceleration",
     "ExampleMixin"
   ],
   "injectors": {
