@@ -1,4 +1,4 @@
-package edu.utah.cs.qed.actorsim;
+package nrl.actorsim.minecraft;
 
 public class Overclocker {
     public static long getClockMs() {

@@ -1,4 +1,4 @@
-package edu.utah.cs.qed.actorsim;
+package nrl.actorsim.minecraft;
 
 import net.fabricmc.api.ModInitializer;
 import nrl.actorsim.minecraft.MinecraftConnector;

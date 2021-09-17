@@ -1,6 +1,6 @@
-package edu.utah.cs.qed.actorsim.mixin;
+package nrl.actorsim.minecraft.mixin;
 
-import edu.utah.cs.qed.actorsim.Overclocker;
+import nrl.actorsim.minecraft.Overclocker;
 import net.minecraft.client.render.RenderTickCounter;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Overwrite;

@@ -19,10 +19,10 @@
   "environment": "*",
   "entrypoints": {
     "main": [
-      "edu.utah.cs.qed.actorsim.ActorSimMod"
+      "nrl.actorsim.minecraft.ActorSimMod"
     ],
     "client": [
-      "edu.utah.cs.qed.actorsim.ExampleClientEntrypoint"
+      "nrl.actorsim.minecraft.ExampleClientEntrypoint"
     ]
   },
   "mixins": [

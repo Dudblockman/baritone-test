@@ -1,6 +1,6 @@
-package edu.utah.cs.qed.actorsim.mixin;
+package nrl.actorsim.minecraft.mixin;
 
-import edu.utah.cs.qed.actorsim.Overclocker;
+import nrl.actorsim.minecraft.Overclocker;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.ServerTask;
 import net.minecraft.util.TickDurationMonitor;

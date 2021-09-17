@@ -1,4 +1,4 @@
-package edu.utah.cs.qed.actorsim;
+package nrl.actorsim.minecraft;
 
 import baritone.api.BaritoneAPI;
 import net.fabricmc.api.ClientModInitializer;

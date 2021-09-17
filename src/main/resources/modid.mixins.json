@@ -1,7 +1,7 @@
 {
   "required": true,
   "minVersion": "0.8",
-  "package": "edu.utah.cs.qed.actorsim.mixin",
+  "package": "nrl.actorsim.minecraft.mixin",
   "compatibilityLevel": "JAVA_8",
   "mixins": [
     "ServerTickAcceleration"
